@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Config;
 
 class LoginController extends Controller
 {
@@ -20,15 +22,15 @@ class LoginController extends Controller
             'password' => 'required|string',
         ]);
 
-        // Configurações via .env (crie estas chaves no .env)
+        // Configurações via .env / config/services.php
         $soapUrl    = config('services.shift.url') ?? env('SHIFT_SOAP_URL');
-        $soapAction = config('services.shift.action') ?? env('SHIFT_SOAP_ACTION');
+        $soapAction = config('services.shift.action') ?? env('SHIFT_SOAP_LOGIN');
 
         if (empty($soapUrl) || empty($soapAction)) {
             return back()->with('error', 'Configuração do serviço SOAP ausente. Verifique .env')->withInput();
         }
 
-        // Monta o envelope SOAP (atenção ao encoding)
+        // Monta envelope SOAP (atenção ao encoding)
         $soapBody = <<<XML
 <?xml version="1.0" encoding="utf-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:shif="http://www.shift.com.br">
@@ -54,10 +56,10 @@ XML;
                 'SOAPAction: "' . $soapAction . '"'
             ],
             CURLOPT_POSTFIELDS => $soapBody,
-            // Opcionalmente force SSL verification (recomendado em produção)
+            // Em produção habilite as verificações SSL:
             // CURLOPT_SSL_VERIFYPEER => true,
             // CURLOPT_SSL_VERIFYHOST => 2,
-            CURLOPT_TIMEOUT => 30,
+            CURLOPT_TIMEOUT => (int) (env('SOAP_TIMEOUT', 30)),
         ]);
 
         $response = curl_exec($curl);
@@ -66,12 +68,13 @@ XML;
         curl_close($curl);
 
         if ($curlErrNo) {
-            Log::error("SOAP cURL error ({$curlErrNo}): {$curlErr}");
+            // Não logar valores sensíveis
+            Log::error("SOAP cURL error ({$curlErrNo}).");
             return back()->with('error', 'Erro ao comunicar com o serviço de autenticação.')->withInput();
         }
 
         if (empty($response)) {
-            Log::warning('SOAP response vazio para usuário: ' . $data['username']);
+            Log::warning('SOAP response vazio para tentativa de login.');
             return back()->with('error', 'Resposta vazia do serviço.')->withInput();
         }
 
@@ -80,37 +83,45 @@ XML;
         $xml = simplexml_load_string($response);
         if ($xml === false) {
             $errors = collect(libxml_get_errors())->map(fn($e) => $e->message)->implode('; ');
-            Log::error("Erro ao parsear XML SOAP: {$errors}");
+            Log::error("Erro ao parsear XML SOAP de login: {$errors}");
             return back()->with('error', 'Resposta inválida do serviço de autenticação.')->withInput();
         }
 
-        // Registra namespaces e busca pelo resultado
+        // Detecta SOAP Faults (mais seguro)
+        $faults = $xml->xpath('//*[local-name()="Fault"]');
+        if (!empty($faults)) {
+            // Não expor detalhes técnicos ao usuário, mas logar sem dados sensíveis
+            Log::error('SOAP Fault recebido no login (ver logs).');
+            return back()->with('error', 'Erro no serviço de autenticação.')->withInput();
+        }
+
+        // Registro de namespaces e busca resiliente pelo nó resultante
         $xml->registerXPathNamespace('soap', 'http://schemas.xmlsoap.org/soap/envelope/');
         $xml->registerXPathNamespace('ns', 'http://www.shift.com.br');
 
-        $resultNodes = $xml->xpath('//ns:WsLoginUsuarioResult');
+        // Primeiro tenta o caminho com namespace; se falhar, usa local-name()
+        $resultNodes = $xml->xpath('//ns:WsLoginUsuarioResult') ?: $xml->xpath('//*[local-name()="WsLoginUsuarioResult"]');
 
         if (!$resultNodes || count($resultNodes) === 0) {
-            Log::warning('XPath WsLoginUsuarioResult não encontrado. Resposta SOAP: ' . substr($response, 0, 1000));
+            Log::warning('XPath WsLoginUsuarioResult não encontrado. Resposta SOAP (trunc): ' . substr($response, 0, 1000));
             return back()->with('error', 'Usuário ou senha inválidos.')->withInput();
         }
 
         $dados = $resultNodes[0];
 
-        // Extrai campos (use casting seguro)
-        $usuarioId   = isset($dados->usuarioWebId)   ? (string)$dados->usuarioWebId   : null;
+        // Extrai campos com casting seguro e fallback
+        $usuarioId   = isset($dados->usuarioWebId) ? (string)$dados->usuarioWebId : null;
         $userId      = isset($dados->usuarioWebUserId) ? (string)$dados->usuarioWebUserId : null;
         $nome        = isset($dados->usuarioWebNome) ? (string)$dados->usuarioWebNome : null;
         $sistema     = isset($dados->usuarioWebSistema) ? (string)$dados->usuarioWebSistema : null;
         $tipoUsuario = isset($dados->usuarioWebTipo) ? (int)$dados->usuarioWebTipo : null;
 
-        // Verifique se a resposta indica sucesso (ajuste conforme seu serviço)
-        // Aqui assumimos que se houver userId/usuarioId então está ok; ajuste se houver um campo 'success' ou 'errorMessage'.
+        // Verifique sucesso: ajuste conforme seu serviço real (talvez exista campo de erro)
         if (empty($usuarioId) && empty($userId)) {
             return back()->with('error', 'Credenciais inválidas.')->withInput();
         }
 
-        // Mapear tipo texto (mesma lógica do seu exemplo)
+        // Mapeia tipo para texto
         $tipoTexto = match ($tipoUsuario) {
             1 => "Clínica / Hospital",
             2 => "Solicitante",
@@ -120,7 +131,9 @@ XML;
             default => "Tipo de usuário desconhecido",
         };
 
-        // Armazena na sessão os dados essenciais do usuário (substitua por Auth se preferir)
+        // Armazena na sessão os dados essenciais do usuário.
+        // Salva a senha criptografada para uso em chamadas SOAP subsequentes.
+        // IMPORTANTE: a senha fica criptografada com APP_KEY do Laravel.
         session([
             'user' => [
                 'usuarioId' => $usuarioId,
@@ -129,14 +142,30 @@ XML;
                 'sistema'   => $sistema,
                 'tipo'      => $tipoUsuario,
                 'tipoText'  => $tipoTexto,
+                'senha'     => Crypt::encryptString($data['password']),
             ]
         ]);
 
-        return redirect()->intended('/home');
+        // Redireciona conforme tipo (rotas devem existir)
+        switch ($tipoUsuario) {
+            case 1:
+                return redirect()->route('clinica.home');
+            case 2:
+                return redirect()->route('solicitante.home');
+            case 3:
+                return redirect()->route('paciente.index');
+            case 4:
+                return redirect()->route('laboratorio.home');
+            case 5:
+                return redirect()->route('admin.home');
+            default:
+                return redirect()->route('home')->with('error', 'Tipo de usuário desconhecido.');
+        }
     }
 
     public function logout(Request $request)
     {
+        // Remover senha da sessão por segurança
         $request->session()->forget('user');
         return redirect()->route('login');
     }
