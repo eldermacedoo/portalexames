@@ -7,71 +7,6 @@ use Illuminate\Support\Facades\Crypt;
 
 class PacienteController extends Controller
 {
-    public function soapLogin(Request $request)
-    {
-        $user = $request->input('user');
-        $senha = $request->input('senha');
-
-        if (empty($user) || empty($senha)) {
-            return response()->json(['ok' => false, 'message' => 'Usuário e senha obrigatórios.'], 400);
-        }
-
-        $url = 'https://portal.laboratorioplatano.com.br:443/shift/lis/platano/elis/s01.util.b2b.shift.consultas.Webserver.cls';
-        $soapEnvelope = <<<XML
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:shif="http://www.shift.com.br">
-  <soapenv:Header/>
-  <soapenv:Body>
-    <shif:WsLoginUsuario>
-      <shif:pUsuario>{$user}</shif:pUsuario>
-      <shif:pSenha>{$senha}</shif:pSenha>
-    </shif:WsLoginUsuario>
-  </soapenv:Body>
-</soapenv:Envelope>
-XML;
-
-        $headers = [
-            'SOAPAction: http://www.shift.com.br/s01.util.b2b.shift.consultas.Webserver.WsLoginUsuario',
-            'Content-Type: text/xml; charset=utf-8'
-        ];
-
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $soapEnvelope,
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_HEADER => true,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
-            CURLOPT_TIMEOUT => 60,
-        ]);
-
-        $resp = curl_exec($ch);
-        if ($resp === false) {
-            $err = curl_error($ch);
-            curl_close($ch);
-            return response()->json(['ok' => false, 'message' => 'cURL error: ' . $err], 500);
-        }
-
-        $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-        $header = substr($resp, 0, $headerSize);
-        $body = substr($resp, $headerSize);
-        curl_close($ch);
-
-        // extrai Set-Cookie
-        preg_match_all('/^Set-Cookie:\s*([^;]*)/mi', $header, $matches);
-        $cookies = $matches[1] ?? [];
-
-        if (count($cookies) > 0) {
-            $cookieString = implode('; ', $cookies);
-            session(['soap_cookie' => $cookieString]);
-            return response()->json(['ok' => true, 'cookie' => $cookieString, 'body' => $body]);
-        }
-
-        return response()->json(['ok' => false, 'message' => 'Nenhum cookie retornado', 'body' => $body], 500);
-    }
-
     public function listaPorPeriodo(Request $request)
     {
         $inicio = $request->query('inicio', date('Y-m-01'));
@@ -94,28 +29,25 @@ XML;
         }
 
         $soapEnvelope = <<<XML
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:shif="http://www.shift.com.br">
-  <soapenv:Header/>
-  <soapenv:Body>
-    <shif:WsGetListaExPacienteByPeriodo>
-      <shif:pPacienteUserId>{$pacienteUserId}</shif:pPacienteUserId>
-      <shif:pSenha>{$senha}</shif:pSenha>
-      <shif:pPeriodoInicio>{$inicio}</shif:pPeriodoInicio>
-      <shif:pPeriodoFinal>{$fim}</shif:pPeriodoFinal>
-      <shif:pEmitirLaudoComparativo>false</shif:pEmitirLaudoComparativo>
-    </shif:WsGetListaExPacienteByPeriodo>
-  </soapenv:Body>
-</soapenv:Envelope>
-XML;
+            <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:shif="http://www.shift.com.br">
+            <soapenv:Header/>
+            <soapenv:Body>
+                <shif:WsGetListaExPacienteByPeriodo>
+                <shif:pPacienteUserId>{$pacienteUserId}</shif:pPacienteUserId>
+                <shif:pSenha>{$senha}</shif:pSenha>
+                <shif:pPeriodoInicio>{$inicio}</shif:pPeriodoInicio>
+                <shif:pPeriodoFinal>{$fim}</shif:pPeriodoFinal>
+                <shif:pEmitirLaudoComparativo>false</shif:pEmitirLaudoComparativo>
+                </shif:WsGetListaExPacienteByPeriodo>
+            </soapenv:Body>
+            </soapenv:Envelope>
+            XML;
 
         $url = 'https://portal.laboratorioplatano.com.br:443/shift/lis/platano/elis/s01.util.b2b.shift.consultas.Webserver.cls';
         $soapCookie = session('soap_cookie') ?? '';
 
-        // headers variants to try
         $headersVariants = [
-            ['SOAPAction' => 'http://www.shift.com.br/s01.util.b2b.shift.consultas.Webserver.WsGetListaExPacienteByPeriodo', 'Content-Type' => 'Request-Response'],
-            ['SOAPAction' => 'http://www.shift.com.br/s01.util.b2b.shift.consultas.Webserver.WsGetListaExPacienteByPeriodo', 'Content-Type' => 'text/xml; charset=utf-8', 'Accept' => 'text/xml'],
-            ['SOAPAction' => 'http://www.shift.com.br/s01.util.b2b.shift.consultas.Webserver.WsLoginUsuario', 'Content-Type' => 'Request-Response'],
+            ['SOAPAction' => 'http://www.shift.com.br/s01.util.b2b.shift.consultas.Webserver.WsGetListaExPacienteByPeriodo', 'Content-Type' => 'Request-Response']
         ];
 
         $attempts = [];
@@ -177,56 +109,84 @@ XML;
                     $osNodes = $xpath->query("//*[local-name() = 'os']");
 
                     foreach ($osNodes as $osNode) {
-                        // Extrai o número da O.S.
-                        $numNode = $xpath->query(".//*[local-name() = 'osNumero']", $osNode);
-                        if (!$numNode || $numNode->length === 0) continue;
+                        // pega somente o osNumero filho direto do nó <os>
+                        $numNodeList = $xpath->query("./*[local-name() = 'osNumero']", $osNode);
+                        if (!$numNodeList || $numNodeList->length === 0) continue;
+                        $osNumero = trim((string) $numNodeList->item(0)->textContent);
 
-                        $osNumero = trim($numNode->item(0)->textContent);
+                        // 1) tentativa específica: listaProcedimento/osProcedimento/mnemonico
+                        $mnQuerySpecific = "./*[local-name() = 'listaProcedimento']/*[local-name() = 'osProcedimento']/*[local-name() = 'mnemonico']";
+                        $mnNodes = $xpath->query($mnQuerySpecific, $osNode);
 
-                        // Extrai SOMENTE mnemonicos dentro de listaProcedimento/osProcedimento/mnemonico
                         $mnemonicos = [];
-                        $mnQuery = ".//*[local-name() = 'listaProcedimento']/*[local-name() = 'osProcedimento']/*[local-name() = 'mnemonico']";
-                        $mnNodes = $xpath->query($mnQuery, $osNode);
 
-                        foreach ($mnNodes as $mn) {
-                            $val = trim($mn->textContent);
-                            if ($val !== '') $mnemonicos[] = $val;
+                        if ($mnNodes && $mnNodes->length > 0) {
+                            foreach ($mnNodes as $mn) {
+                                $val = trim((string) $mn->textContent);
+                                if ($val !== '') $mnemonicos[] = $val;
+                            }
+                        } else {
+                            // 2) tentativa mais ampla: qualquer <mnemonico> dentro do <os>
+                            $mnNodesBroad = $xpath->query(".//*[local-name() = 'mnemonico']", $osNode);
+                            if ($mnNodesBroad && $mnNodesBroad->length > 0) {
+                                // filtro: aceitar apenas mnemonicos que tenham ancestor listaProcedimento ou osProcedimento
+                                foreach ($mnNodesBroad as $mn) {
+                                    // percorre ancestry para checar se está dentro de listaProcedimento/osProcedimento
+                                    $accept = false;
+                                    $p = $mn->parentNode;
+                                    while ($p && $p->nodeType === XML_ELEMENT_NODE) {
+                                        $lname = $p->localName ?? $p->nodeName;
+                                        if (in_array(strtolower($lname), ['listaprocedimento', 'osprocedimento'])) {
+                                            $accept = true;
+                                            break;
+                                        }
+                                        $p = $p->parentNode;
+                                    }
+                                    if ($accept) {
+                                        $val = trim((string) $mn->textContent);
+                                        if ($val !== '') $mnemonicos[] = $val;
+                                    }
+                                }
+                            }
                         }
 
-                        // remove duplicados e reindexa
+                        // 3) fallback final: se ainda vazio, tentar pegar <nome> dentro de osProcedimento (somente como fallback opcional)
+                        if (empty($mnemonicos)) {
+                            $nameNodes = $xpath->query("./*[local-name() = 'listaProcedimento']/*[local-name() = 'osProcedimento']/*[local-name() = 'nome']", $osNode);
+                            if ($nameNodes && $nameNodes->length > 0) {
+                                foreach ($nameNodes as $n) {
+                                    $v = trim((string) $n->textContent);
+                                    if ($v !== '') $mnemonicos[] = $v;
+                                }
+                            }
+                        }
+
+                        // normaliza: únicos e reindexados
                         $mnemonicos = array_values(array_unique($mnemonicos));
 
-                        // **use $found (correção)**
+                        // se ainda vazio, capture um snippet pequeno do <os> para depuração (não muito grande)
+                        $debugSnippet = null;
+                        if (empty($mnemonicos)) {
+                            // obter XML do osNode limitado a 1000 chars para não explodir resposta
+                            $xmlFragment = '';
+                            try {
+                                $xmlFragment = $dom->saveXML($osNode);
+                                if (is_string($xmlFragment)) $xmlFragment = mb_substr($xmlFragment, 0, 1000);
+                            } catch (\Throwable $e) {
+                                $xmlFragment = null;
+                            }
+                            $debugSnippet = $xmlFragment;
+                        }
+
+                        // monta o resultado
                         $found[] = [
                             'osNumero' => $osNumero,
-                            'mnemonicos' => $mnemonicos
+                            'mnemonicos' => $mnemonicos,
+                            'debug' => $debugSnippet // null quando ok, string curta quando vazio (útil para inspeção)
                         ];
                     }
                 } else {
-                    // fallback regex after removing namespaces
-                    $noNs = preg_replace('/xmlns[^=]*="[^"]*"/i', '', $resp);
-                    $noNs = preg_replace('/(<\/?)[a-z0-9]+:([a-z0-9\-_]+)/i', '$1$2', $noNs);
-                    if (preg_match_all('/<os\b[^>]*>(.*?)<\/os>/is', $noNs, $blocks)) {
-                        foreach ($blocks[1] as $b) {
-                            if (preg_match('/<osNumero[^>]*>(.*?)<\/osNumero>/is', $b, $mnum)) {
-                                $osNumero = trim(strip_tags($mnum[1]));
-                                $mn = [];
-                                if (preg_match_all('/<mnemonico[^>]*>(.*?)<\/mnemonico>/is', $b, $mm)) {
-                                    foreach ($mm[1] as $v) {
-                                        $val = trim(strip_tags($v));
-                                        if ($val !== '') $mn[] = $val;
-                                    }
-                                }
-                                if (empty($mn) && preg_match_all('/<nome[^>]*>(.*?)<\/nome>/is', $b, $nn)) {
-                                    foreach ($nn[1] as $v) {
-                                        $val = trim(strip_tags($v));
-                                        if ($val !== '') $mn[] = $val;
-                                    }
-                                }
-                                $found[] = ['osNumero' => $osNumero, 'mnemonicos' => array_values(array_unique($mn))];
-                            }
-                        }
-                    }
+                    echo "esta caindo no else";
                 }
             }
 
@@ -236,7 +196,7 @@ XML;
 
             if (!empty($found)) {
                 $final = $found;
-                break; // stop at first successful variant
+                break;
             }
         }
 

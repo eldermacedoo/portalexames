@@ -20,8 +20,7 @@
                     <input type="date" id="fim" class="form-control" value="{{ date('Y-m-d') }}">
                 </div>
                 <div class="col-md-3">
-                    <button id="btnBuscar" class="btn btn-primary">Buscar O.S.</button>
-                    <button id="btnExport" class="btn btn-outline-secondary ms-2" disabled>Exportar CSV</button>
+                    <button id="btnBuscar" class="btn btn-primary">Buscar O.S.</button>                    
                 </div>
                 <div class="col-md-3 text-end">
                     <div id="loading" style="display:none;">
@@ -64,7 +63,6 @@ document.addEventListener('DOMContentLoaded', function() {
     axios.defaults.headers.common['Accept'] = 'application/json';
 
     const btnBuscar = document.getElementById('btnBuscar');
-    const btnExport = document.getElementById('btnExport');
     const inicio = document.getElementById('inicio');
     const fim = document.getElementById('fim');
     const loading = document.getElementById('loading');
@@ -82,8 +80,7 @@ document.addEventListener('DOMContentLoaded', function() {
         tableBody.innerHTML = '';
         attemptsList.innerHTML = '';
         attemptsArea.style.display = 'none';
-        resultArea.style.display = 'none';
-        btnExport.disabled = true;
+        resultArea.style.display = 'none';        
     }
 
     btnBuscar.addEventListener('click', async () => {
@@ -115,8 +112,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         tr.appendChild(td1); tr.appendChild(td2);
                         tableBody.appendChild(tr);
                     });
-                    resultArea.style.display = 'block';
-                    btnExport.disabled = false;
+                    resultArea.style.display = 'block';                   
                     showAlert('Busca concluída.', 'success');
                     if (data.attempts_summary) console.log('attempts_summary', data.attempts_summary);
                 }
@@ -150,20 +146,6 @@ document.addEventListener('DOMContentLoaded', function() {
             loading.style.display = 'none';
             btnBuscar.disabled = false;
         }
-    });
-
-    btnExport.addEventListener('click', () => {
-        const rows = ['"osNumero","mnemonicos"'];
-        const trs = tableBody.querySelectorAll('tr');
-        trs.forEach(tr => {
-            const vals = Array.from(tr.querySelectorAll('td')).map(td => '"' + td.textContent.replace(/"/g,'""') + '"');
-            rows.push(vals.join(','));
-        });
-        const blob = new Blob([rows.join('\r\n')], { type: 'text/csv' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'os_mnemonicos.csv';
-        a.click();
     });
 
     function showAttempts(attempts) {
