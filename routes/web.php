@@ -32,3 +32,4 @@ Route::get('/home', function () {
 Route::get('/paciente', function () { return view('paciente.index'); })->name('paciente.index');
 Route::get('/pacientes/periodo', [PacienteController::class, 'listaPorPeriodo'])->name('paciente.lista');
 Route::post('/soap-login', [PacienteController::class, 'soapLogin'])->name('paciente.soapLogin');
+Route::get('/pacientes/os-abrir', [PacienteController::class, 'abrirOsPdf'])->name('pacientes.os.abrir');
