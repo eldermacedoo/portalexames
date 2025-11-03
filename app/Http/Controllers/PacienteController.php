@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Crypt;
+use App\Models\FeedbackPaciente;
 
 class PacienteController extends Controller
 {
@@ -373,5 +374,105 @@ XML;
         } catch (\Throwable $e) {
             return response("Erro ao buscar PDF remoto: " . $e->getMessage(), 500);
         }
+    }
+    public function osAbrir(Request $request)
+    {
+        $osNumero = $request->query('osNumero');
+        $emitir = $request->query('emitir', 'false');
+        $pdfUrl = $this->gerarUrlPdf($osNumero, $emitir); // o método que você já usa pra gerar o PDF
+
+        // 🔎 Verifica se já existe avaliação
+        $feedback = \App\Models\FeedbackPaciente::where('os_numero', $osNumero)->first();
+
+        return view('paciente.pdf-clean', [
+            'osNumero' => $osNumero,
+            'pdfUrl' => $pdfUrl,
+            'jaAvaliado' => $feedback ? true : false, // envia flag para o Blade
+        ]);
+    }
+
+
+    public function pdfFeedback(Request $request)
+    {
+        $osNumero = $request->query('osNumero');
+        $emitir = $request->query('emitir', 'false');
+
+        if (!$osNumero) {
+            abort(404);
+        }
+
+        // monta a URL original do PDF (rota que já gera o PDF no seu sistema)
+        $pdfUrl = url("/paciente/os-abrir?osNumero=" . urlencode($osNumero) . "&emitir=" . urlencode($emitir));
+
+        return view('paciente.pdf-feedback', compact('pdfUrl', 'osNumero'));
+    }
+
+    public function salvarFeedback(Request $request)
+    {
+        $data = $request->validate([
+            'feedbackId' => 'nullable|integer',
+            'osNumero'   => 'required_without:feedbackId|string|max:100',
+            'nota'       => 'nullable|integer|min:0|max:10',
+            'comentario' => 'nullable|string|max:2000',
+        ]);
+
+        // 1) Se veio feedbackId -> atualiza o registro (comentario ou nota)
+        if (!empty($data['feedbackId'])) {
+            $fp = \App\Models\FeedbackPaciente::find($data['feedbackId']);
+            if (!$fp) {
+                return response()->json(['success' => false, 'message' => 'Feedback não encontrado'], 404);
+            }
+
+            // Atualiza apenas os campos enviados (mantendo outros)
+            if (array_key_exists('nota', $data) && $data['nota'] !== null) {
+                $fp->nota = $data['nota'];
+            }
+            if (array_key_exists('comentario', $data)) {
+                $fp->comentario = $data['comentario'];
+            }
+            $fp->save();
+
+            return response()->json(['success' => true, 'id' => $fp->id]);
+        }
+
+        // 2) Criação: evita duplicidade para mesma O.S.
+        if (!empty($data['osNumero'])) {
+            $existe = \App\Models\FeedbackPaciente::where('os_numero', $data['osNumero'])->exists();
+            if ($existe) {
+                return response()->json(['success' => false, 'message' => 'O.S. já avaliada'], 409);
+            }
+        } else {
+            // por segurança (validacao já exige osNumero quando feedbackId ausente)
+            return response()->json(['success' => false, 'message' => 'O.S. obrigatória para criar feedback'], 422);
+        }
+
+        // 3) Cria novo feedback
+        $fp = \App\Models\FeedbackPaciente::create([
+            'os_numero'  => $data['osNumero'],
+            'nota'       => $data['nota'] ?? null,
+            'comentario' => $data['comentario'] ?? null,
+            'ip'         => $request->ip(),
+            'user_agent' => $request->header('User-Agent'),
+        ]);
+
+        return response()->json(['success' => true, 'id' => $fp->id], 201);
+    }
+
+    public function pdfFeedbackClean(Request $request)
+    {
+        $osNumero = $request->query('osNumero');
+        $emitir = $request->query('emitir', 'false');
+
+        if (!$osNumero) {
+            abort(404, 'Número de O.S. não informado.');
+        }
+
+        // monta a URL do PDF (use sua lógica se for diferente)
+        $pdfUrl = url("/paciente/os-abrir?osNumero=" . urlencode($osNumero) . "&emitir=" . urlencode($emitir));
+
+        // verifica se já existe feedback para essa O.S.
+        $jaAvaliado = FeedbackPaciente::where('os_numero', $osNumero)->exists();
+
+        return view('paciente.pdf-clean', compact('osNumero', 'pdfUrl', 'jaAvaliado'));
     }
 }

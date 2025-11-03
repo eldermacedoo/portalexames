@@ -32,4 +32,9 @@ Route::get('/home', function () {
 Route::get('/paciente', function () { return view('paciente.index'); })->name('paciente.index');
 Route::get('/pacientes/periodo', [PacienteController::class, 'listaPorPeriodo'])->name('paciente.lista');
 Route::post('/soap-login', [PacienteController::class, 'soapLogin'])->name('paciente.soapLogin');
-Route::get('/pacientes/os-abrir', [PacienteController::class, 'abrirOsPdf'])->name('pacientes.os.abrir');
+Route::get('/paciente/os-abrir', [PacienteController::class, 'abrirOsPdf'])->name('paciente.os.abrir');
+Route::get('/paciente/pdf-feedback', [PacienteController::class, 'pdfFeedback'])->name('paciente.pdf-feedback');
+Route::post('/paciente/feedback', [PacienteController::class, 'salvarFeedback'])->name('paciente.salvarFeedback');
+Route::get('/paciente/pdf-clean', [PacienteController::class, 'pdfFeedbackClean'])->name('paciente.pdf-clean');
+
+

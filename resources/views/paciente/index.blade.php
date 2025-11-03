@@ -122,18 +122,30 @@
             const num = parseInt(s, 10);
             if (!isNaN(num)) {
                 switch (num) {
-                    case 1: return 'Disponível';
-                    case 2: return 'Disponível parcial';
-                    case 3: return 'Em processamento';
-                    case 4: return 'Consultado WEB';
-                    case 5: return 'Entregue';
-                    case 6: return 'Impresso';
-                    case 7: return 'Pronto / Não disponível online';
-                    case 8: return 'Não aplicado';
-                    case 9: return 'Não realizado';
-                    case 10: return 'Pendente de material';
-                    case 11: return 'Necessita recoleta';
-                    default: return s;
+                    case 1:
+                        return 'Disponível';
+                    case 2:
+                        return 'Disponível parcial';
+                    case 3:
+                        return 'Em processamento';
+                    case 4:
+                        return 'Consultado WEB';
+                    case 5:
+                        return 'Entregue';
+                    case 6:
+                        return 'Impresso';
+                    case 7:
+                        return 'Pronto / Não disponível online';
+                    case 8:
+                        return 'Não aplicado';
+                    case 9:
+                        return 'Não realizado';
+                    case 10:
+                        return 'Pendente de material';
+                    case 11:
+                        return 'Necessita recoleta';
+                    default:
+                        return s;
                 }
             }
 
@@ -186,7 +198,12 @@
             btnBuscar.disabled = true;
 
             try {
-                const resp = await axios.get('/pacientes/periodo', { params: { inicio: s, fim: e } });
+                const resp = await axios.get('/pacientes/periodo', {
+                    params: {
+                        inicio: s,
+                        fim: e
+                    }
+                });
                 const data = resp.data;
                 console.log('listaPorPeriodo ->', data);
 
@@ -227,12 +244,12 @@
                             if (Array.isArray(item.mnemonicos) && item.mnemonicos.length > 0) {
                                 const maxShow = 20;
                                 td2.textContent =
-                                    item.mnemonicos.length <= maxShow
-                                        ? item.mnemonicos.join(', ')
-                                        : item.mnemonicos.slice(0, maxShow).join(', ') +
-                                          ' ... (+' +
-                                          (item.mnemonicos.length - maxShow) +
-                                          ')';
+                                    item.mnemonicos.length <= maxShow ?
+                                    item.mnemonicos.join(', ') :
+                                    item.mnemonicos.slice(0, maxShow).join(', ') +
+                                    ' ... (+' +
+                                    (item.mnemonicos.length - maxShow) +
+                                    ')';
                             } else td2.textContent = '-';
                             tr.appendChild(td2);
 
@@ -270,7 +287,7 @@
                                 }
 
                                 // permitido → abre PDF
-                                const url = `/pacientes/os-abrir?osNumero=${encodeURIComponent(item.osNumero)}&emitir=false`;
+                                const url = `/paciente/pdf-clean?osNumero=${encodeURIComponent(item.osNumero)}&emitir=false`;
                                 window.open(url, '_blank');
                             });
 
@@ -321,9 +338,9 @@
                 const pre = document.createElement('pre');
                 pre.style.maxHeight = '200px';
                 pre.style.overflow = 'auto';
-                pre.textContent = isSummary
-                    ? JSON.stringify(a, null, 2)
-                    : a.response_snippet || '(sem snippet)';
+                pre.textContent = isSummary ?
+                    JSON.stringify(a, null, 2) :
+                    a.response_snippet || '(sem snippet)';
                 div.appendChild(pre);
                 attemptsList.appendChild(div);
             });
