@@ -3,66 +3,90 @@
 @section('title', 'Login')
 
 @section('content')
-<div class="row justify-content-center">
-  <div class="col-md-4">
-    <div class="card mt-5">
-      <div class="card-body">
-        <h4 class="card-title text-center mb-4">Entrar</h4>
+<div class="container py-4">
+    <div class="row g-4">
 
-        {{-- mostra erros de sessão (aceita string ou array) --}}
-        @if(session('error'))
-          @php
-            $err = session('error');
-            if (is_array($err)) {
-                $err = implode(' - ', array_map(function($v){
-                    return (string)$v;
-                }, $err));
-            }
-          @endphp
-          <div class="alert alert-danger">{{ $err }}</div>
-        @endif
+        <!-- ESQUERDA — INSTRUÇÕES -->
+        <div class="col-lg-7">
+            <div class="sidebar-card">
+                <h5 class="mb-3 fw-semibold">Instruções de acesso</h5>
 
-        <form method="POST" action="{{ route('login.post') }}">
-          @csrf
+                <h6 class="fw-semibold">Pacientes</h6>
+                <p>
+                    - Campo Usuário: é possível informar qualquer um dos dados: CPF, e-mail, código do pedido
+                    ou o código existente no cartão do laboratório. O código é formado pela letra P mais uma sequência de números.<br>
+                    <strong>Exemplo:</strong> P243
+                </p>
 
-          <div class="mb-3">
-            <label for="username" class="form-label">Usuário</label>
-            @php
-              $oldUsername = old('username');
-              if (is_array($oldUsername)) {
-                  // pega o primeiro valor caso venha como array
-                  $oldUsername = count($oldUsername) ? (string)$oldUsername[0] : '';
-              }
-            @endphp
-            <input id="username"
-                   name="username"
-                   type="text"
-                   class="form-control @error('username') is-invalid @enderror"
-                   value="{{ $oldUsername }}"
-                   required autofocus>
-            @error('username')
-              <div class="invalid-feedback">{{ $message }}</div>
-            @enderror
-          </div>
+                <p>- Campo senha: Informe a senha disponibilizada para seu acesso.</p>
 
-          <div class="mb-3">
-            <label for="password" class="form-label">Senha</label>
-            <input id="password"
-                   name="password"
-                   type="password"
-                   class="form-control @error('password') is-invalid @enderror"
-                   required>
-            @error('password')
-              <div class="invalid-feedback">{{ $message }}</div>
-            @enderror
-          </div>
+                <h6 class="fw-semibold mt-4">Solicitantes</h6>
+                <p>
+                    - Campo Usuário: é possível informar qualquer um dos dados: CPF, e-mail ou número do conselho
+                    seguido de duas letras referente à sigla do seu estado.<br>
+                    <strong>Exemplo:</strong> 12345SP
+                </p>
 
-          <div class="d-grid gap-2">
-            <button class="btn btn-primary" type="submit">Entrar</button>
-          </div>
-        </form>
-      </div>
+                <p>- Campo senha: Informe a senha disponibilizada para seu acesso.</p>
+            </div>
+        </div>
+
+        <!-- DIREITA — LOGIN -->
+        <div class="col-lg-5 d-flex justify-content-center">
+            <div class="login-card w-100" style="max-width: 380px;">
+
+                <!-- Cabeçalho igual ao Plátano -->
+                <div class="card-header">
+                    <span class="fw-semibold">Login</span>                    
+                </div>
+
+                <div class="card-body">
+
+                    {{-- título --}}
+                    <h4 class="login-title-main mb-3">Resultados de exames</h4>
+
+                    {{-- mensagens de erro --}}
+                    @if(session('error'))
+                        @php
+                            $err = session('error');
+                            if (is_array($err)) {
+                                $err = implode(' - ', array_map(fn($v) => (string)$v, $err));
+                            }
+                        @endphp
+                        <div class="alert alert-danger">{{ $err }}</div>
+                    @endif
+
+                    <form method="POST" action="{{ route('login.post') }}">
+                        @csrf
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Usuário:</label>
+                            <input type="text"
+                                   name="username"
+                                   class="form-control"
+                                   value="{{ old('username') }}"
+                                   required autofocus>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Senha:</label>
+                            <input type="password"
+                                   name="password"
+                                   class="form-control"
+                                   required>
+                        </div>
+
+                        <a href="#" class="text-muted small">Esqueci minha senha</a>
+
+                        <div class="btn-row mt-3">
+                            <button type="submit" class="btn-login-platano">Entrar</button>
+                        </div>
+                    </form>
+                </div>
+
+            </div>
+        </div>
+
     </div>
-  </div>
 </div>
 @endsection

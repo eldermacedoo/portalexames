@@ -5,14 +5,25 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\Storage;
 use App\Models\FeedbackPaciente;
 
 class PacienteController extends Controller
 {
+    // =========================
+    // Config/Const SOAP
+    // =========================
+    private string $soapUrl = 'https://portal.laboratorioplatano.com.br:443/shift/lis/platano/elis/s01.util.b2b.shift.consultas.Webserver.cls';
+    private string $soapNs  = 'http://www.shift.com.br';
+
+    // =========================
+    // LISTAR POR PERÍODO (mantém sua lógica, corrige headers)
+    // =========================
     public function listaPorPeriodo(Request $request)
     {
         $inicio = $request->query('inicio', date('Y-m-01'));
-        $fim = $request->query('fim', date('Y-m-d'));
+        $fim    = $request->query('fim', date('Y-m-d'));
 
         if (!\DateTime::createFromFormat('Y-m-d', $inicio) || !\DateTime::createFromFormat('Y-m-d', $fim)) {
             return response()->json(['error' => 'Formato inválido. Use YYYY-MM-DD'], 422);
@@ -31,40 +42,38 @@ class PacienteController extends Controller
         }
 
         $soapEnvelope = <<<XML
-    <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:shif="http://www.shift.com.br">
-    <soapenv:Header/>
-    <soapenv:Body>
-        <shif:WsGetListaExPacienteByPeriodo>
-        <shif:pPacienteUserId>{$pacienteUserId}</shif:pPacienteUserId>
-        <shif:pSenha>{$senha}</shif:pSenha>
-        <shif:pPeriodoInicio>{$inicio}</shif:pPeriodoInicio>
-        <shif:pPeriodoFinal>{$fim}</shif:pPeriodoFinal>
-        <shif:pEmitirLaudoComparativo>false</shif:pEmitirLaudoComparativo>
-        </shif:WsGetListaExPacienteByPeriodo>
-    </soapenv:Body>
-    </soapenv:Envelope>
-    XML;
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:shif="{$this->soapNs}">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <shif:WsGetListaExPacienteByPeriodo>
+      <shif:pPacienteUserId>{$pacienteUserId}</shif:pPacienteUserId>
+      <shif:pSenha>{$senha}</shif:pSenha>
+      <shif:pPeriodoInicio>{$inicio}</shif:pPeriodoInicio>
+      <shif:pPeriodoFinal>{$fim}</shif:pPeriodoFinal>
+      <shif:pEmitirLaudoComparativo>false</shif:pEmitirLaudoComparativo>
+    </shif:WsGetListaExPacienteByPeriodo>
+  </soapenv:Body>
+</soapenv:Envelope>
+XML;
 
-        $url = 'https://portal.laboratorioplatano.com.br:443/shift/lis/platano/elis/s01.util.b2b.shift.consultas.Webserver.cls';
         $soapCookie = session('soap_cookie') ?? '';
 
-        $headersVariants = [
-            ['SOAPAction' => 'http://www.shift.com.br/s01.util.b2b.shift.consultas.Webserver.WsGetListaExPacienteByPeriodo', 'Content-Type' => 'Request-Response']
-        ];
+        $headersVariants = [[
+            'SOAPAction'  => "{$this->soapNs}/s01.util.b2b.shift.consultas.Webserver.WsGetListaExPacienteByPeriodo",
+            'Content-Type'=> 'text/xml; charset=utf-8',
+        ]];
 
         $attempts = [];
         $final = [];
 
         foreach ($headersVariants as $variant) {
             $curlHeaders = [];
-            foreach ($variant as $k => $v) {
-                $curlHeaders[] = "{$k}: {$v}";
-            }
+            foreach ($variant as $k => $v) $curlHeaders[] = "{$k}: {$v}";
             if (!empty($soapCookie)) $curlHeaders[] = 'Cookie: ' . $soapCookie;
 
             $ch = curl_init();
             curl_setopt_array($ch, [
-                CURLOPT_URL => $url,
+                CURLOPT_URL => $this->soapUrl,
                 CURLOPT_RETURNTRANSFER => true,
                 CURLOPT_POST => true,
                 CURLOPT_POSTFIELDS => $soapEnvelope,
@@ -76,7 +85,7 @@ class PacienteController extends Controller
 
             $resp = curl_exec($ch);
             $errNo = curl_errno($ch);
-            $err = curl_error($ch);
+            $err   = curl_error($ch);
             $httpStatus = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
 
@@ -84,12 +93,12 @@ class PacienteController extends Controller
 
             $attempt = [
                 'headers_sent' => $variant,
-                'cookie_sent' => !empty($soapCookie),
-                'http_status' => $httpStatus,
-                'curl_errno' => $errNo,
-                'curl_error' => $err,
+                'cookie_sent'  => !empty($soapCookie),
+                'http_status'  => $httpStatus,
+                'curl_errno'   => $errNo,
+                'curl_error'   => $err,
                 'response_snippet' => $snippet,
-                'found_count' => 0,
+                'found_count'  => 0,
                 'found_sample' => []
             ];
 
@@ -99,7 +108,6 @@ class PacienteController extends Controller
                 continue;
             }
 
-            // try DOM parse
             $found = [];
             if (is_string($resp) && trim($resp) !== '') {
                 libxml_use_internal_errors(true);
@@ -111,33 +119,24 @@ class PacienteController extends Controller
                     $osNodes = $xpath->query("//*[local-name() = 'os']");
 
                     foreach ($osNodes as $osNode) {
-                        // pega somente o osNumero filho direto do nó <os>
+                        // osNumero
                         $numNodeList = $xpath->query("./*[local-name() = 'osNumero']", $osNode);
                         if (!$numNodeList || $numNodeList->length === 0) continue;
                         $osNumero = trim((string) $numNodeList->item(0)->textContent);
 
-                        // pega o <data> filho direto do <os>
+                        // data
                         $dateNodeList = $xpath->query("./*[local-name() = 'data']", $osNode);
                         $data = null;
                         if ($dateNodeList && $dateNodeList->length > 0) {
                             $dateStr = trim((string) $dateNodeList->item(0)->textContent);
-                            // tenta validar como YYYY-MM-DD
                             $d = \DateTime::createFromFormat('Y-m-d', $dateStr);
-                            if ($d && $d->format('Y-m-d') === $dateStr) {
-                                $data = $dateStr;
-                            } else {
-                                // tenta parse mais genérico e normalizar
-                                try {
-                                    $d2 = new \DateTime($dateStr);
-                                    $data = $d2->format('Y-m-d');
-                                } catch (\Throwable $e) {
-                                    // mantém null se não conseguir parsear
-                                    $data = null;
-                                }
+                            if ($d && $d->format('Y-m-d') === $dateStr) $data = $dateStr;
+                            else {
+                                try { $d2 = new \DateTime($dateStr); $data = $d2->format('Y-m-d'); } catch (\Throwable $e) { $data = null; }
                             }
                         }
 
-                        // pega o <status> filho direto do <os> (novo)
+                        // status
                         $statusNodeList = $xpath->query("./*[local-name() = 'status']", $osNode);
                         $status = null;
                         if ($statusNodeList && $statusNodeList->length > 0) {
@@ -145,11 +144,10 @@ class PacienteController extends Controller
                             $status = ($s === '') ? null : $s;
                         }
 
-                        // 1) tentativa específica: listaProcedimento/osProcedimento/mnemonico
+                        // mnemonicos (duas tentativas + fallback)
+                        $mnemonicos = [];
                         $mnQuerySpecific = "./*[local-name() = 'listaProcedimento']/*[local-name() = 'osProcedimento']/*[local-name() = 'mnemonico']";
                         $mnNodes = $xpath->query($mnQuerySpecific, $osNode);
-
-                        $mnemonicos = [];
 
                         if ($mnNodes && $mnNodes->length > 0) {
                             foreach ($mnNodes as $mn) {
@@ -157,19 +155,13 @@ class PacienteController extends Controller
                                 if ($val !== '') $mnemonicos[] = $val;
                             }
                         } else {
-                            // 2) tentativa mais ampla: qualquer <mnemonico> dentro do <os>
                             $mnNodesBroad = $xpath->query(".//*[local-name() = 'mnemonico']", $osNode);
                             if ($mnNodesBroad && $mnNodesBroad->length > 0) {
-                                // filtro: aceitar apenas mnemonicos que tenham ancestor listaProcedimento ou osProcedimento
                                 foreach ($mnNodesBroad as $mn) {
-                                    $accept = false;
-                                    $p = $mn->parentNode;
+                                    $accept = false; $p = $mn->parentNode;
                                     while ($p && $p->nodeType === XML_ELEMENT_NODE) {
                                         $lname = $p->localName ?? $p->nodeName;
-                                        if (in_array(strtolower($lname), ['listaprocedimento', 'osprocedimento'])) {
-                                            $accept = true;
-                                            break;
-                                        }
+                                        if (in_array(strtolower($lname), ['listaprocedimento','osprocedimento'])) { $accept = true; break; }
                                         $p = $p->parentNode;
                                     }
                                     if ($accept) {
@@ -180,7 +172,6 @@ class PacienteController extends Controller
                             }
                         }
 
-                        // 3) fallback final: se ainda vazio, tentar pegar <nome> dentro de osProcedimento (somente como fallback opcional)
                         if (empty($mnemonicos)) {
                             $nameNodes = $xpath->query("./*[local-name() = 'listaProcedimento']/*[local-name() = 'osProcedimento']/*[local-name() = 'nome']", $osNode);
                             if ($nameNodes && $nameNodes->length > 0) {
@@ -191,263 +182,240 @@ class PacienteController extends Controller
                             }
                         }
 
-                        // normaliza: únicos e reindexados
                         $mnemonicos = array_values(array_unique($mnemonicos));
 
-                        // se ainda vazio, capture um snippet pequeno do <os> para depuração (não muito grande)
                         $debugSnippet = null;
                         if (empty($mnemonicos)) {
-                            $xmlFragment = '';
                             try {
                                 $xmlFragment = $dom->saveXML($osNode);
-                                if (is_string($xmlFragment)) $xmlFragment = mb_substr($xmlFragment, 0, 1000);
-                            } catch (\Throwable $e) {
-                                $xmlFragment = null;
-                            }
-                            $debugSnippet = $xmlFragment;
+                                $debugSnippet = is_string($xmlFragment) ? mb_substr($xmlFragment, 0, 1000) : null;
+                            } catch (\Throwable $e) { $debugSnippet = null; }
                         }
 
-                        // monta o resultado (agora incluindo "data" e "status")
                         $found[] = [
-                            'osNumero' => $osNumero,
-                            'data' => $data, // YYYY-MM-DD ou null
-                            'status' => $status, // <-- novo campo colocado logo após a data
+                            'osNumero'   => $osNumero,
+                            'data'       => $data,
+                            'status'     => $status,
                             'mnemonicos' => $mnemonicos,
-                            'debug' => $debugSnippet
+                            'debug'      => $debugSnippet,
                         ];
                     }
+
                 } else {
-                    // opcional: salvar erro de parse em attempts para debugging
                     $attempt['note'] = 'XML load failed';
                 }
             }
 
-            $attempt['found_count'] = count($found);
+            $attempt['found_count']  = count($found);
             $attempt['found_sample'] = array_slice($found, 0, 10);
             $attempts[] = $attempt;
 
-            if (!empty($found)) {
-                $final = $found;
-                break;
-            }
+            if (!empty($found)) { $final = $found; break; }
         }
 
         if (empty($final)) {
-            return response()->json(['success' => false, 'message' => 'Nenhuma O.S. encontrada', 'attempts' => $attempts], 200);
+            return response()->json([
+                'success'  => false,
+                'message'  => 'Nenhuma O.S. encontrada',
+                'attempts' => $attempts
+            ], 200);
         }
 
-        return response()->json(['success' => true, 'osNumeros' => $final, 'attempts_summary' => array_map(function ($a) {
-            return [
+        return response()->json([
+            'success' => true,
+            'osNumeros' => $final,
+            'attempts_summary' => array_map(fn ($a) => [
                 'headers_sent' => $a['headers_sent'],
-                'http_status' => $a['http_status'],
-                'found_count' => $a['found_count']
-            ];
-        }, $attempts)]);
+                'http_status'  => $a['http_status'],
+                'found_count'  => $a['found_count'],
+            ], $attempts),
+        ]);
     }
 
-
+    // =========================
+    // ABRIR/PROXY PDF COM CACHE + HEADERS
+    // Rota: paciente.os.abrir (GET /paciente/os-abrir)
+    // =========================
     public function abrirOsPdf(Request $request)
     {
         $osNumero = $request->query('osNumero');
-        $emitir = $request->query('emitir', 'false');
+        $emitir   = $request->query('emitir', 'false');
 
-        if (!$osNumero) {
-            return response('Parâmetro osNumero é obrigatório', 400);
-        }
+        if (!$osNumero) return response('Parâmetro osNumero é obrigatório', 400);
 
-        // checa sessão (mesma validação que você já usa)
+        // Sessão
         $sessionUser = session('user');
         if (!$sessionUser || !isset($sessionUser['userId']) || !isset($sessionUser['senha'])) {
             return response('Usuário não autenticado (session user).', 401);
         }
 
         $pacienteUserId = $sessionUser['userId'];
-        try {
-            $senha = Crypt::decryptString($sessionUser['senha']);
-        } catch (\Throwable $e) {
-            $senha = $sessionUser['senha'] ?? null;
-        }
+        try { $senha = Crypt::decryptString($sessionUser['senha']); }
+        catch (\Throwable $e) { $senha = $sessionUser['senha'] ?? null; }
 
-        // monta envelope SOAP (igual ao detalha)
+        // Envelope SOAP: WsGetListaExPaciente (busca urlPdf)
         $soapEnvelope = <<<XML
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:shif="http://www.shift.com.br">
-   <soapenv:Header/>
-   <soapenv:Body>
-      <shif:WsGetListaExPaciente>
-         <shif:pPacienteUserId>{$pacienteUserId}</shif:pPacienteUserId>
-         <shif:pSenha>{$senha}</shif:pSenha>
-         <shif:pCodigoOs>{$osNumero}</shif:pCodigoOs>
-         <shif:pEmitirLaudoComparativo>{$emitir}</shif:pEmitirLaudoComparativo>
-      </shif:WsGetListaExPaciente>
-   </soapenv:Body>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:shif="{$this->soapNs}">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <shif:WsGetListaExPaciente>
+      <shif:pPacienteUserId>{$pacienteUserId}</shif:pPacienteUserId>
+      <shif:pSenha>{$senha}</shif:pSenha>
+      <shif:pCodigoOs>{$osNumero}</shif:pCodigoOs>
+      <shif:pEmitirLaudoComparativo>{$emitir}</shif:pEmitirLaudoComparativo>
+    </shif:WsGetListaExPaciente>
+  </soapenv:Body>
 </soapenv:Envelope>
 XML;
 
-        $url = 'https://portal.laboratorioplatano.com.br:443/shift/lis/platano/elis/s01.util.b2b.shift.consultas.Webserver.cls';
-        $soapCookie = session('soap_cookie') ?? '';
-
         $curlHeaders = [
-            'SOAPAction: http://www.shift.com.br/s01.util.b2b.shift.consultas.Webserver.WsGetListaExPaciente',
-            'Content-Type: Request-Response'
+            'SOAPAction: ' . "{$this->soapNs}/s01.util.b2b.shift.consultas.Webserver.WsGetListaExPaciente",
+            'Content-Type: text/xml; charset=utf-8',
         ];
+        if ($cookie = session('soap_cookie')) $curlHeaders[] = 'Cookie: ' . $cookie;
 
-        if (!empty($soapCookie)) $curlHeaders[] = 'Cookie: ' . $soapCookie;
-
-        // executar o SOAP via cURL (mantendo configurações que já funcionam)
+        // cURL SOAP
         $ch = curl_init();
         curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
+            CURLOPT_URL => $this->soapUrl,
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 60,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
             CURLOPT_CUSTOMREQUEST => 'POST',
             CURLOPT_POSTFIELDS => $soapEnvelope,
             CURLOPT_HTTPHEADER => $curlHeaders,
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_TIMEOUT => 60,
         ]);
-
         $resp = curl_exec($ch);
         $errNo = curl_errno($ch);
-        $err = curl_error($ch);
+        $err   = curl_error($ch);
         $httpStatus = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        if ($errNo) {
-            return response("cURL error ao chamar SOAP: {$err}", 502);
-        }
+        if ($errNo) return response("cURL error ao chamar SOAP: {$err}", 502);
         if (!is_string($resp) || trim($resp) === '') {
             return response("Resposta vazia do serviço SOAP (status: {$httpStatus})", 502);
         }
 
-        // parse XML e extrair urlPdf (primeiro)
+        // Extrai urlPdf
         libxml_use_internal_errors(true);
         $dom = new \DOMDocument();
-        $loaded = @$dom->loadXML($resp);
-        if (!$loaded) {
-            // devolve um preview para debugging
+        if (!@$dom->loadXML($resp)) {
             return response("Falha ao parsear XML SOAP. Preview: " . mb_substr($resp, 0, 2000), 502);
         }
-
         $xpath = new \DOMXPath($dom);
         $nodes = $xpath->query("//*[local-name() = 'ListaOS']/*[local-name() = 'os']/*[local-name() = 'urlPdf']");
-
         $urlPdf = null;
-        if ($nodes && $nodes->length > 0) {
-            $urlPdf = trim((string) $nodes->item(0)->textContent);
-        } else {
-            // fallback: qualquer <urlPdf> no documento
+        if ($nodes && $nodes->length > 0) $urlPdf = trim((string) $nodes->item(0)->textContent);
+        if (!$urlPdf) {
             $alt = $xpath->query("//*[local-name() = 'urlPdf']");
-            if ($alt && $alt->length > 0) {
-                $urlPdf = trim((string) $alt->item(0)->textContent);
+            if ($alt && $alt->length > 0) $urlPdf = trim((string) $alt->item(0)->textContent);
+        }
+        if (!$urlPdf) return response("Nenhum urlPdf encontrado para O.S. {$osNumero}", 404);
+
+        // ====== CACHE LOCAL DO PDF ======
+        $suffix   = ($emitir === 'true' || $emitir === true) ? '_emitir' : '';
+        $relPath  = "laudos/{$osNumero}{$suffix}.pdf";
+        $absPath  = Storage::path($relPath);
+
+        if (!Storage::exists($relPath)) {
+            try {
+                $remote = Http::withOptions(['verify' => false])->get($urlPdf);
+                if (!$remote->successful()) {
+                    return response("Falha ao baixar PDF remoto. Status: " . $remote->status(), 502);
+                }
+                // Garante pasta
+                Storage::makeDirectory('laudos');
+                Storage::put($relPath, $remote->body());
+            } catch (\Throwable $e) {
+                return response("Erro ao baixar/salvar PDF: " . $e->getMessage(), 500);
             }
         }
 
-        if (empty($urlPdf)) {
-            return response("Nenhum urlPdf encontrado para O.S. {$osNumero}", 404);
+        // ====== HEADERS DE CACHE ======
+        $mtime = @filemtime($absPath) ?: time();
+        $mtimeHdr = gmdate('D, d M Y H:i:s', $mtime) . ' GMT';
+        $etag = @md5_file($absPath) ?: sha1($relPath.$mtime);
+
+        $ifNoneMatch  = $request->headers->get('If-None-Match');
+        $ifModified   = $request->headers->get('If-Modified-Since');
+
+        if ($ifNoneMatch === $etag || $ifModified === $mtimeHdr) {
+            return response('', 304, [
+                'ETag' => $etag,
+                'Last-Modified' => $mtimeHdr,
+                'Cache-Control' => 'public, max-age=86400',
+            ]);
         }
 
-        // Agora: buscar o PDF remotamente e devolver com headers inline
-        try {
-            // usar Http client do Laravel (guzzle por baixo)
-            // desativa verify para manter comportamento atual (igual cURL); em produção, corrija SSL.
-            $remote = Http::withOptions(['verify' => false])->get($urlPdf);
+        // Stream do arquivo local
+        $filename = 'laudo-' . preg_replace('/[^0-9A-Za-z_\-\.]/', '_', $osNumero) . '.pdf';
 
-            if (!$remote->successful()) {
-                // caso de erro 403/404 etc do servidor remoto
-                return response("Falha ao baixar PDF remoto. Status: " . $remote->status(), 502);
-            }
-
-            // tentar inferir tipo: se header remoto informar content-type, use-o; senão use application/pdf
-            $contentType = $remote->header('Content-Type') ?: 'application/pdf';
-
-            // desejar dar nome ao arquivo (podemos inferir do path da URL)
-            $filename = 'exame-' . preg_replace('/[^0-9A-Za-z_\-\.]/', '_', $osNumero) . '.pdf';
-
-            return response($remote->body(), 200)
-                ->header('Content-Type', $contentType)
-                ->header('Content-Disposition', 'inline; filename="' . $filename . '"')
-                ->header('Cache-Control', 'private, max-age=3600');
-        } catch (\Throwable $e) {
-            return response("Erro ao buscar PDF remoto: " . $e->getMessage(), 500);
-        }
-    }
-    public function osAbrir(Request $request)
-    {
-        $osNumero = $request->query('osNumero');
-        $emitir = $request->query('emitir', 'false');
-        $pdfUrl = $this->gerarUrlPdf($osNumero, $emitir); // o método que você já usa pra gerar o PDF
-
-        // 🔎 Verifica se já existe avaliação
-        $feedback = \App\Models\FeedbackPaciente::where('os_numero', $osNumero)->first();
-
-        return view('paciente.pdf-clean', [
-            'osNumero' => $osNumero,
-            'pdfUrl' => $pdfUrl,
-            'jaAvaliado' => $feedback ? true : false, // envia flag para o Blade
+        return Response::file($absPath, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="'.$filename.'"',
+            'Cache-Control'       => 'public, max-age=86400',
+            'ETag'                => $etag,
+            'Last-Modified'       => $mtimeHdr,
+            'Accept-Ranges'       => 'bytes',
         ]);
     }
 
-
+    // =========================
+    // VIEW: PDF com feedback “leve”
+    // Rota: paciente.pdf-feedback (GET /paciente/pdf-feedback)
+    // =========================
     public function pdfFeedback(Request $request)
     {
         $osNumero = $request->query('osNumero');
-        $emitir = $request->query('emitir', 'false');
+        $emitir   = $request->query('emitir', 'false');
+        if (!$osNumero) abort(404);
 
-        if (!$osNumero) {
-            abort(404);
-        }
-
-        // monta a URL original do PDF (rota que já gera o PDF no seu sistema)
-        $pdfUrl = url("/paciente/os-abrir?osNumero=" . urlencode($osNumero) . "&emitir=" . urlencode($emitir));
+        // monta URL pela rota nomeada (evita hardcode)
+        $pdfUrl = route('paciente.os.abrir', [
+            'osNumero' => $osNumero,
+            'emitir'   => $emitir,
+        ]);
 
         return view('paciente.pdf-feedback', compact('pdfUrl', 'osNumero'));
     }
 
+    // =========================
+    // SALVAR FEEDBACK (idempotente por O.S.)
+    // Rota: paciente.salvarFeedback (POST /paciente/feedback)
+    // =========================
     public function salvarFeedback(Request $request)
     {
         $data = $request->validate([
             'feedbackId' => 'nullable|integer',
             'osNumero'   => 'required_without:feedbackId|string|max:100',
-            'nota'       => 'nullable|integer|min:0|max:10',
+            'nota'       => 'nullable|integer|min:1|max:5', // UI usa 1..5
             'comentario' => 'nullable|string|max:2000',
         ]);
 
-        // 1) Se veio feedbackId -> atualiza o registro (comentario ou nota)
+        // Atualização por ID
         if (!empty($data['feedbackId'])) {
-            $fp = \App\Models\FeedbackPaciente::find($data['feedbackId']);
-            if (!$fp) {
-                return response()->json(['success' => false, 'message' => 'Feedback não encontrado'], 404);
-            }
+            $fp = FeedbackPaciente::find($data['feedbackId']);
+            if (!$fp) return response()->json(['success' => false, 'message' => 'Feedback não encontrado'], 404);
 
-            // Atualiza apenas os campos enviados (mantendo outros)
-            if (array_key_exists('nota', $data) && $data['nota'] !== null) {
-                $fp->nota = $data['nota'];
-            }
-            if (array_key_exists('comentario', $data)) {
-                $fp->comentario = $data['comentario'];
-            }
+            if (array_key_exists('nota', $data) && $data['nota'] !== null) $fp->nota = $data['nota'];
+            if (array_key_exists('comentario', $data)) $fp->comentario = $data['comentario'];
             $fp->save();
 
             return response()->json(['success' => true, 'id' => $fp->id]);
         }
 
-        // 2) Criação: evita duplicidade para mesma O.S.
-        if (!empty($data['osNumero'])) {
-            $existe = \App\Models\FeedbackPaciente::where('os_numero', $data['osNumero'])->exists();
-            if ($existe) {
-                return response()->json(['success' => false, 'message' => 'O.S. já avaliada'], 409);
-            }
-        } else {
-            // por segurança (validacao já exige osNumero quando feedbackId ausente)
+        // Criação idempotente por O.S.
+        if (empty($data['osNumero'])) {
             return response()->json(['success' => false, 'message' => 'O.S. obrigatória para criar feedback'], 422);
         }
 
-        // 3) Cria novo feedback
-        $fp = \App\Models\FeedbackPaciente::create([
+        $exists = FeedbackPaciente::where('os_numero', $data['osNumero'])->exists();
+        if ($exists) {
+            return response()->json(['success' => false, 'message' => 'O.S. já avaliada'], 409);
+        }
+
+        $fp = FeedbackPaciente::create([
             'os_numero'  => $data['osNumero'],
             'nota'       => $data['nota'] ?? null,
             'comentario' => $data['comentario'] ?? null,
@@ -458,19 +426,22 @@ XML;
         return response()->json(['success' => true, 'id' => $fp->id], 201);
     }
 
+    // =========================
+    // VIEW: PDF clean com/sem footer (flag jaAvaliado)
+    // Rota: paciente.pdf-clean (GET /paciente/pdf-clean)
+    // =========================
     public function pdfFeedbackClean(Request $request)
     {
         $osNumero = $request->query('osNumero');
-        $emitir = $request->query('emitir', 'false');
+        $emitir   = $request->query('emitir', 'false');
 
-        if (!$osNumero) {
-            abort(404, 'Número de O.S. não informado.');
-        }
+        if (!$osNumero) abort(404, 'Número de O.S. não informado.');
 
-        // monta a URL do PDF (use sua lógica se for diferente)
-        $pdfUrl = url("/paciente/os-abrir?osNumero=" . urlencode($osNumero) . "&emitir=" . urlencode($emitir));
+        $pdfUrl = route('paciente.os.abrir', [
+            'osNumero' => $osNumero,
+            'emitir'   => $emitir,
+        ]);
 
-        // verifica se já existe feedback para essa O.S.
         $jaAvaliado = FeedbackPaciente::where('os_numero', $osNumero)->exists();
 
         return view('paciente.pdf-clean', compact('osNumero', 'pdfUrl', 'jaAvaliado'));

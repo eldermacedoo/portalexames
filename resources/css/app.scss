@@ -1,0 +1,37 @@
+// Coloque todo @use / @forward no topo — sem nada acima deles!
+// Primeiro carregamos funções e variáveis do Bootstrap para poder configurar.
+@use "bootstrap/scss/functions";
+@use "bootstrap/scss/variables" with (
+  $primary: #2f6f5f,
+  $body-bg: #f8f9fb,
+  $border-radius: .5rem
+);
+
+// Agora carregamos o Bootstrap "principal".
+@use "bootstrap" as *;
+
+/* 
+  NÃO coloque @import url(...) aqui. Se quiser usar fontes do Google,
+  adicione a <link> no <head> do blade (vou mostrar abaixo).
+*/
+
+/* Seus estilos customizados depois do @use */
+body {
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: linear-gradient(180deg, #ffffff 0%, #f6f6f6 100%);
+  color: #333;
+}
+
+.login-card {
+  background: #fff;
+  padding: 28px;
+  border-radius: 12px;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.07);
+}
+
+.login-title {
+  font-size: 1.4rem;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 18px;
+}

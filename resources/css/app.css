@@ -1,0 +1,124 @@
+/* ----- BOTÃO IGUAL PLÁTANO ----- */
+.btn-login-platano {
+    background: #666;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 22px;
+    font-size: 0.9rem;
+    transition: 0.2s ease-in-out;
+}
+
+.btn-login-platano:hover {
+    background: #4f4f4f;
+    color: #fff;
+}
+
+/* alinhamento do botão */
+.btn-row {
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* ----- CARD PRINCIPAL DE LOGIN ----- */
+.login-card {
+    border-radius: 12px;
+    background: #fff;
+    padding: 0 !important;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+    border: 1px solid #e1e1e1;
+}
+
+.login-card .card-header {
+    background: #fafafa;
+    padding: 10px 15px;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.login-card .card-header small {
+    float: right;
+    margin-top: 3px;
+    color: #777;
+}
+
+.login-card .card-body {
+    padding: 18px 20px;
+}
+
+.login-title-main {
+    font-size: 1.6rem;
+    text-align: center;
+    margin-bottom: 18px;
+    font-weight: 600;
+}
+
+/* ----- SIDEBAR INSTRUÇÕES ----- */
+.sidebar-card {
+    border-radius: 8px;
+    background: #fff;
+    padding: 18px 20px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+    border: 1px solid #ededed;
+}
+
+/* --- FOOTER FIXO --- */
+.site-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+
+    background: #f8f9fa;
+    border-top: 1px solid #e5e5e5;
+
+    padding: 12px 0;
+    text-align: center;
+
+    font-size: 0.9rem;
+    color: #666;
+
+    z-index: 10;
+}
+
+/* Empurra o conteúdo pra não ficar escondido atrás do footer */
+body {
+    padding-bottom: 20px; /* altura mínima do footer */
+}
+
+
+/* Topbar azul fina */
+.topbar-blue {
+    background: #0d6efd;
+    color: #fff;
+    height: 44px;
+    display: flex;
+    align-items: center;
+}
+.topbar-blue .topbar-title {
+    font-weight: 600;
+    font-size: 1.05rem;
+}
+
+/* Header branco */
+.site-header {
+    background: #fff;
+    border-bottom: 1px solid #eee;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+}
+
+/* Menu estilo Plátano */
+.main-nav .nav-link {
+    color: #4b4b4b;
+    font-size: 0.95rem;
+    margin: 0 18px;
+    text-decoration: none;
+}
+.main-nav .nav-link:hover {
+    color: #2f6f5f;
+    text-decoration: none;
+}
+
+/* Mobile */
+@media(max-width: 991px) {
+    .main-nav { display: none !important; }
+}
