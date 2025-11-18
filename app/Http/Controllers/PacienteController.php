@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Storage;
 use App\Models\FeedbackPaciente;
@@ -42,25 +43,25 @@ class PacienteController extends Controller
         }
 
         $soapEnvelope = <<<XML
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:shif="{$this->soapNs}">
-  <soapenv:Header/>
-  <soapenv:Body>
-    <shif:WsGetListaExPacienteByPeriodo>
-      <shif:pPacienteUserId>{$pacienteUserId}</shif:pPacienteUserId>
-      <shif:pSenha>{$senha}</shif:pSenha>
-      <shif:pPeriodoInicio>{$inicio}</shif:pPeriodoInicio>
-      <shif:pPeriodoFinal>{$fim}</shif:pPeriodoFinal>
-      <shif:pEmitirLaudoComparativo>false</shif:pEmitirLaudoComparativo>
-    </shif:WsGetListaExPacienteByPeriodo>
-  </soapenv:Body>
-</soapenv:Envelope>
-XML;
+            <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:shif="{$this->soapNs}">
+            <soapenv:Header/>
+            <soapenv:Body>
+                <shif:WsGetListaExPacienteByPeriodo>
+                <shif:pPacienteUserId>{$pacienteUserId}</shif:pPacienteUserId>
+                <shif:pSenha>{$senha}</shif:pSenha>
+                <shif:pPeriodoInicio>{$inicio}</shif:pPeriodoInicio>
+                <shif:pPeriodoFinal>{$fim}</shif:pPeriodoFinal>
+                <shif:pEmitirLaudoComparativo>false</shif:pEmitirLaudoComparativo>
+                </shif:WsGetListaExPacienteByPeriodo>
+            </soapenv:Body>
+            </soapenv:Envelope>
+            XML;
 
         $soapCookie = session('soap_cookie') ?? '';
 
         $headersVariants = [[
             'SOAPAction'  => "{$this->soapNs}/s01.util.b2b.shift.consultas.Webserver.WsGetListaExPacienteByPeriodo",
-            'Content-Type'=> 'text/xml; charset=utf-8',
+            'Content-Type' => 'text/xml; charset=utf-8',
         ]];
 
         $attempts = [];
@@ -132,7 +133,12 @@ XML;
                             $d = \DateTime::createFromFormat('Y-m-d', $dateStr);
                             if ($d && $d->format('Y-m-d') === $dateStr) $data = $dateStr;
                             else {
-                                try { $d2 = new \DateTime($dateStr); $data = $d2->format('Y-m-d'); } catch (\Throwable $e) { $data = null; }
+                                try {
+                                    $d2 = new \DateTime($dateStr);
+                                    $data = $d2->format('Y-m-d');
+                                } catch (\Throwable $e) {
+                                    $data = null;
+                                }
                             }
                         }
 
@@ -158,10 +164,14 @@ XML;
                             $mnNodesBroad = $xpath->query(".//*[local-name() = 'mnemonico']", $osNode);
                             if ($mnNodesBroad && $mnNodesBroad->length > 0) {
                                 foreach ($mnNodesBroad as $mn) {
-                                    $accept = false; $p = $mn->parentNode;
+                                    $accept = false;
+                                    $p = $mn->parentNode;
                                     while ($p && $p->nodeType === XML_ELEMENT_NODE) {
                                         $lname = $p->localName ?? $p->nodeName;
-                                        if (in_array(strtolower($lname), ['listaprocedimento','osprocedimento'])) { $accept = true; break; }
+                                        if (in_array(strtolower($lname), ['listaprocedimento', 'osprocedimento'])) {
+                                            $accept = true;
+                                            break;
+                                        }
                                         $p = $p->parentNode;
                                     }
                                     if ($accept) {
@@ -189,7 +199,9 @@ XML;
                             try {
                                 $xmlFragment = $dom->saveXML($osNode);
                                 $debugSnippet = is_string($xmlFragment) ? mb_substr($xmlFragment, 0, 1000) : null;
-                            } catch (\Throwable $e) { $debugSnippet = null; }
+                            } catch (\Throwable $e) {
+                                $debugSnippet = null;
+                            }
                         }
 
                         $found[] = [
@@ -200,7 +212,6 @@ XML;
                             'debug'      => $debugSnippet,
                         ];
                     }
-
                 } else {
                     $attempt['note'] = 'XML load failed';
                 }
@@ -210,7 +221,10 @@ XML;
             $attempt['found_sample'] = array_slice($found, 0, 10);
             $attempts[] = $attempt;
 
-            if (!empty($found)) { $final = $found; break; }
+            if (!empty($found)) {
+                $final = $found;
+                break;
+            }
         }
 
         if (empty($final)) {
@@ -224,7 +238,7 @@ XML;
         return response()->json([
             'success' => true,
             'osNumeros' => $final,
-            'attempts_summary' => array_map(fn ($a) => [
+            'attempts_summary' => array_map(fn($a) => [
                 'headers_sent' => $a['headers_sent'],
                 'http_status'  => $a['http_status'],
                 'found_count'  => $a['found_count'],
@@ -232,10 +246,6 @@ XML;
         ]);
     }
 
-    // =========================
-    // ABRIR/PROXY PDF COM CACHE + HEADERS
-    // Rota: paciente.os.abrir (GET /paciente/os-abrir)
-    // =========================
     public function abrirOsPdf(Request $request)
     {
         $osNumero = $request->query('osNumero');
@@ -250,23 +260,25 @@ XML;
         }
 
         $pacienteUserId = $sessionUser['userId'];
-        try { $senha = Crypt::decryptString($sessionUser['senha']); }
-        catch (\Throwable $e) { $senha = $sessionUser['senha'] ?? null; }
+        try {
+            $senha = Crypt::decryptString($sessionUser['senha']);
+        } catch (\Throwable $e) {
+            $senha = $sessionUser['senha'] ?? null;
+        }
 
-        // Envelope SOAP: WsGetListaExPaciente (busca urlPdf)
         $soapEnvelope = <<<XML
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:shif="{$this->soapNs}">
-  <soapenv:Header/>
-  <soapenv:Body>
-    <shif:WsGetListaExPaciente>
-      <shif:pPacienteUserId>{$pacienteUserId}</shif:pPacienteUserId>
-      <shif:pSenha>{$senha}</shif:pSenha>
-      <shif:pCodigoOs>{$osNumero}</shif:pCodigoOs>
-      <shif:pEmitirLaudoComparativo>{$emitir}</shif:pEmitirLaudoComparativo>
-    </shif:WsGetListaExPaciente>
-  </soapenv:Body>
-</soapenv:Envelope>
-XML;
+            <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:shif="{$this->soapNs}">
+            <soapenv:Header/>
+            <soapenv:Body>
+                <shif:WsGetListaExPaciente>
+                <shif:pPacienteUserId>{$pacienteUserId}</shif:pPacienteUserId>
+                <shif:pSenha>{$senha}</shif:pSenha>
+                <shif:pCodigoOs>{$osNumero}</shif:pCodigoOs>
+                <shif:pEmitirLaudoComparativo>{$emitir}</shif:pEmitirLaudoComparativo>
+                </shif:WsGetListaExPaciente>
+            </soapenv:Body>
+            </soapenv:Envelope>
+            XML;
 
         $curlHeaders = [
             'SOAPAction: ' . "{$this->soapNs}/s01.util.b2b.shift.consultas.Webserver.WsGetListaExPaciente",
@@ -335,7 +347,7 @@ XML;
         // ====== HEADERS DE CACHE ======
         $mtime = @filemtime($absPath) ?: time();
         $mtimeHdr = gmdate('D, d M Y H:i:s', $mtime) . ' GMT';
-        $etag = @md5_file($absPath) ?: sha1($relPath.$mtime);
+        $etag = @md5_file($absPath) ?: sha1($relPath . $mtime);
 
         $ifNoneMatch  = $request->headers->get('If-None-Match');
         $ifModified   = $request->headers->get('If-Modified-Since');
@@ -353,7 +365,7 @@ XML;
 
         return Response::file($absPath, [
             'Content-Type'        => 'application/pdf',
-            'Content-Disposition' => 'inline; filename="'.$filename.'"',
+            'Content-Disposition' => 'inline; filename="' . $filename . '"',
             'Cache-Control'       => 'public, max-age=86400',
             'ETag'                => $etag,
             'Last-Modified'       => $mtimeHdr,
@@ -445,5 +457,173 @@ XML;
         $jaAvaliado = FeedbackPaciente::where('os_numero', $osNumero)->exists();
 
         return view('paciente.pdf-clean', compact('osNumero', 'pdfUrl', 'jaAvaliado'));
+    }
+
+    public function logout()
+    {
+        // Remove dados da sessão do paciente
+        session()->forget('user');
+        session()->forget('soap_cookie');
+
+        // Destroi toda a sessão (opcional)
+        // session()->flush();
+
+        // Redireciona para login
+        return redirect()->route('login')->with('message', 'Você saiu da sua conta.');
+    }
+
+    public function formAlterarSenha()
+    {
+        return view('paciente.alterar-senha');
+    }
+
+
+    public function AlterarSenha(Request $request)
+    {
+        // 1) Validação básica (vai popular $data)
+        $validator = Validator::make($request->all(), [
+            'current_password' => 'required|string',
+            'new_password'     => 'required|string|min:8|confirmed',
+        ]);
+
+        if ($validator->fails()) {
+            return redirect()->back()->withErrors($validator)->withInput();
+        }
+
+        // pega os dados validados
+        $data = $validator->validated();
+        // observação: 'new_password_confirmation' é exigido pelo rule 'confirmed'
+
+        // --- identificar usuário na sessão ---
+        $sessionUser = session('user');
+        $remoteUserId = $sessionUser['userId'] ?? $sessionUser['usuarioId'] ?? null;
+
+        if (!$remoteUserId) {
+            return redirect()->back()->with('password_error', 'Impossível identificar usuário para alteração de senha.');
+        }
+
+        $oldPass = $data['current_password'];
+        $newPass = $data['new_password'];
+
+        // --- monta envelope SOAP (usando o XML que você forneceu) ---
+        $soapEnvelope = <<<XML
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:shif="{$this->soapNs}">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <shif:WsAlterarSenha>
+      <shif:pUserId>{$remoteUserId}</shif:pUserId>
+      <shif:pSenha>{$oldPass}</shif:pSenha>
+      <shif:pNovaSenha>{$newPass}</shif:pNovaSenha>
+    </shif:WsAlterarSenha>
+  </soapenv:Body>
+</soapenv:Envelope>
+XML;
+
+        $curlHeaders = [
+            'Content-Type: text/xml; charset=utf-8',
+            'SOAPAction: ' . "{$this->soapNs}/s01.util.b2b.shift.consultas.Webserver.WsAlterarSenha", // ajuste se necessário
+        ];
+
+        if ($cookie = session('soap_cookie')) {
+            $curlHeaders[] = 'Cookie: ' . $cookie;
+        }
+
+        $ch = curl_init();
+        curl_setopt_array($ch, [
+            CURLOPT_URL => $this->soapUrl,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $soapEnvelope,
+            CURLOPT_HTTPHEADER => $curlHeaders,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_TIMEOUT => 60,
+        ]);
+
+        $resp = curl_exec($ch);
+        $errNo = curl_errno($ch);
+        $errMsg = curl_error($ch);
+        $httpStatus = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($errNo) {
+            return redirect()->back()->with('password_error', 'Erro ao conectar com o serviço: ' . $errMsg);
+        }
+
+        if (!is_string($resp) || trim($resp) === '') {
+            return redirect()->back()->with('password_error', "Resposta vazia do serviço SOAP (HTTP {$httpStatus}).");
+        }
+
+        // parse XML e checar Faults / resultado
+        libxml_use_internal_errors(true);
+        $dom = new \DOMDocument();
+        if (!@$dom->loadXML($resp)) {
+            return redirect()->back()->with('password_error', 'Resposta inválida do serviço de alteração de senha.');
+        }
+        $xpath = new \DOMXPath($dom);
+
+        // verifica Fault
+        $fault = $xpath->query('//faultstring | //Fault/faultstring | //Fault');
+        if ($fault && $fault->length > 0) {
+            $faultText = trim((string)$fault->item(0)->textContent);
+            $msg = $faultText ?: 'Erro no serviço SOAP (Fault).';
+            return redirect()->back()->with('password_error', "Serviço recusou alteração: {$msg}");
+        }
+
+        // tentar inferir sucesso a partir de nós comuns
+        $possibleNodes = [
+            "//*[contains(local-name(), 'WsAlterarSenhaResponse')]",
+            "//*[contains(local-name(), 'WsAlterarSenhaResult')]",
+            "//*[contains(local-name(), 'Resultado')]",
+            "//*[contains(local-name(), 'sucesso')]",
+            "//*[contains(local-name(), 'Sucesso')]",
+        ];
+
+        $soapOk = null;
+        $soapMessage = null;
+        foreach ($possibleNodes as $q) {
+            $nodes = $xpath->query($q);
+            if ($nodes && $nodes->length > 0) {
+                $txt = trim((string)$nodes->item(0)->textContent);
+                if ($txt === '') continue;
+                $lower = mb_strtolower($txt);
+                if (in_array($lower, ['true', 'ok', 'sucesso', '1'])) {
+                    $soapOk = true;
+                    break;
+                }
+                if (str_contains($lower, 'sucesso') || str_contains($lower, 'ok') || str_contains($lower, 'alterado')) {
+                    $soapOk = true;
+                    break;
+                }
+                $soapOk = false;
+                $soapMessage = $txt;
+                break;
+            }
+        }
+
+        if ($soapOk === null) {
+            $soapOk = ($httpStatus >= 200 && $httpStatus < 300);
+            if (!$soapOk) $soapMessage = "HTTP status {$httpStatus}";
+        }
+
+        if (!$soapOk) {
+            $msg = $soapMessage ?? 'Servidor retornou falha ao alterar senha.';
+            return redirect()->back()->with('password_error', $msg);
+        }
+
+        // === alteração remota OK -> atualiza sessão com nova senha criptografada ===
+        try {
+            $novaSenhaCripto = Crypt::encryptString($newPass);
+        } catch (\Throwable $e) {
+            $novaSenhaCripto = $newPass; // fallback (não recomendado)
+        }
+
+        $sessionUser['senha'] = $novaSenhaCripto;
+        session(['user' => $sessionUser]);
+
+        // opcional: limpar cookie SOAP se precisar forçar novo login
+        // session()->forget('soap_cookie');
+
+        return redirect()->back()->with('password_success', 'Senha alterada com sucesso.');
     }
 }

@@ -20,36 +20,82 @@
     justify-content: flex-end;
 }
 
-/* ----- CARD PRINCIPAL DE LOGIN ----- */
+/* -- Login Card *--/
+
+/* Card geral */
 .login-card {
-    border-radius: 12px;
+    border-radius: 10px;
+    box-shadow: 0 8px 20px rgba(31, 41, 55, 0.06);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    overflow: hidden;
     background: #fff;
-    padding: 0 !important;
-    box-shadow: 0 8px 20px rgba(0,0,0,0.08);
-    border: 1px solid #e1e1e1;
 }
 
-.login-card .card-header {
-    background: #fafafa;
-    padding: 10px 15px;
-    border-bottom: 1px solid #e5e5e5;
+
+/* Cabeçalho estilo Plátano */
+.card-header {
+    background: linear-gradient(180deg, #fafdfb, #fff);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
 }
 
-.login-card .card-header small {
-    float: right;
-    margin-top: 3px;
-    color: #777;
-}
-
-.login-card .card-body {
-    padding: 18px 20px;
-}
-
+/* Título grande dentro do card */
 .login-title-main {
-    font-size: 1.6rem;
-    text-align: center;
-    margin-bottom: 18px;
+    font-size: 20px;
     font-weight: 600;
+    color: #3b4b4b;
+}
+
+/* Label alinhada e inputs com fundo azul claro */
+.form-control.custom-input {
+    background: #eaf3fb;
+    border: 1px solid rgba(0, 0, 0, 0.10);
+    height: 36px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* Cor verde do texto "Login" e labels */
+.text-platano,
+.form-label.fw-semibold {
+    color: #2f6b3a;
+}
+
+/* Botão estilo Plátano */
+.btn-login-platano {
+    background: #4d4d4d;
+    /* altere para seu HEX se quiser */
+    color: #fff;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-weight: 700;
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.12);
+}
+
+.btn-login-platano:active {
+    transform: translateY(1px);
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.10);
+}
+
+/* Mensagens de erro (mantém o Bootstrap) */
+.alert-danger {
+    margin-top: 8px;
+}
+
+/* Responsividade: reduz o espaçamento em telas pequenas */
+@media (max-width: 420px) {
+    .login-card {
+        max-width: 100%;
+    }
+
+    .login-title-main {
+        font-size: 18px;
+    }
+
+    .form-label {
+        width: 72px;
+    }
 }
 
 /* ----- SIDEBAR INSTRUÇÕES ----- */
@@ -57,8 +103,13 @@
     border-radius: 8px;
     background: #fff;
     padding: 18px 20px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
     border: 1px solid #ededed;
+    color: #607050;
+}
+
+.sidebar-card.bloco-1 {
+    background: #f0eded;
 }
 
 /* --- FOOTER FIXO --- */
@@ -82,29 +133,67 @@
 
 /* Empurra o conteúdo pra não ficar escondido atrás do footer */
 body {
-    padding-bottom: 20px; /* altura mínima do footer */
-}
-
-
-/* Topbar azul fina */
-.topbar-blue {
-    background: #0d6efd;
-    color: #fff;
-    height: 44px;
-    display: flex;
-    align-items: center;
-}
-.topbar-blue .topbar-title {
-    font-weight: 600;
-    font-size: 1.05rem;
+    padding-bottom: 20px;
+    /* altura mínima do footer */
+    background-color: #f4f6f6 !important;
 }
 
 /* Header branco */
 .site-header {
     background: #fff;
     border-bottom: 1px solid #eee;
-    box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04);
+    padding-top: 6px;
+    padding-bottom: 6px;
 }
+
+/* faz o header permitir posicionamento absoluto */
+.site-header .container {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+      padding-top: 4px !important;
+    padding-bottom: 4px !important;
+    /* não deixa empurrar o menu */
+}
+.main-nav .nav-link {
+    padding: 0;
+}
+.main-nav form {
+    display: inline-block;
+}
+
+
+
+/* aumenta a logo sem quebrar o layout */
+.logo-platano {
+    max-height: 120px;
+    /* ajuste conforme desejar */
+    height: auto;
+    width: auto;
+    object-fit: contain;
+}
+
+/* --- centraliza o menu --- */
+.site-header nav {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
+    /* evita quebra de linha nos links */
+}
+
+/* --- cria uma "coluna fantasma" à direita para equilibrar --- */
+.site-header .container::after {
+    content: "";
+    width: 120px;
+    /* mesmo espaço visual da logo */
+    height: 1px;
+    /* não aparece */
+}
+
 
 /* Menu estilo Plátano */
 .main-nav .nav-link {
@@ -113,12 +202,172 @@ body {
     margin: 0 18px;
     text-decoration: none;
 }
+
 .main-nav .nav-link:hover {
     color: #2f6f5f;
     text-decoration: none;
 }
 
+
 /* Mobile */
 @media(max-width: 991px) {
-    .main-nav { display: none !important; }
+    .main-nav {
+        display: none !important;
+    }
+}
+
+
+
+
+/* Container central */
+.help-card-wrap {
+    max-width: 520px;
+    margin: 36px auto;
+    padding: 0 12px;
+}
+
+/* Card base */
+.help-card {
+    border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(31, 41, 55, 0.08);
+    overflow: hidden;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    background: #fff;
+}
+
+/* Top header (verde) */
+.help-card .card-top {
+    background: linear-gradient(180deg, #f6fbf8 0%, #ffffff 100%);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+    padding: 16px 20px;
+}
+
+.help-card .title {
+    color: #245a38;
+    /* verde escuro parecido com imagem */
+    font-weight: 600;
+    font-size: 18px;
+    margin: 0;
+}
+
+/* Seção principal (área com fundo acinzentado) */
+.help-card .card-section {
+    padding: 16px 20px;
+}
+
+.help-card .section-pale {
+    background: #f4f6f6;
+    /* tom levemente acinzentado */
+    padding: 14px 18px;
+    border-top: 1px solid rgba(0, 0, 0, 0.03);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.03);
+}
+
+.help-card h6.section-heading {
+    font-size: 16px;
+    margin: 0 0 8px 0;
+    font-weight: 600;
+    color: #283032;
+}
+
+.help-card p.small {
+    margin: 6px 0;
+    color: #3b3f3f;
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.help-card .example {
+    font-weight: 700;
+    color: #222;
+}
+
+/* Separador e espaçamento final */
+.help-card .bottom {
+    padding: 14px 20px;
+    background: #fff;
+}
+
+/* Mobile adjustments */
+@media (max-width: 420px) {
+    .help-card-wrap {
+        padding: 12px;
+    }
+
+    .help-card .title {
+        font-size: 16px;
+    }
+}
+
+/* BASE DO BADGE */
+.status-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 20px;
+    color: #fff;
+    text-transform: none;
+}
+
+/* --------- CORES ESPECÍFICAS --------- */
+
+/* Disponível */
+.status-ok {
+    background: #2ecc71;      /* verde */
+}
+
+/* Disponível parcial */
+.status-partial {
+    background: #27ae60;      /* verde escuro suave */
+}
+
+/* Em processamento */
+.status-processing {
+    background: #f39c12;      /* laranja */
+}
+
+/* Consultado WEB */
+.status-consultado {
+    background: #2980b9;      /* azul forte */
+}
+
+/* Entregue */
+.status-entregue {
+    background: #34495e;      /* cinza escuro */
+}
+
+/* Impresso */
+.status-impresso {
+    background: #8e44ad;      /* roxo */
+}
+
+/* Aguardando amostra */
+.status-aguarde {
+    background: #f1c40f;      /* amarelo */
+    color: #000;
+}
+
+/* Pendente de material */
+.status-pendente {
+    background: #d35400;      /* laranja escuro */
+}
+
+/* Necessita recoleta */
+.status-recoleta {
+    background: #c0392b;      /* vermelho vinho */
+}
+
+/* Não realizado / Não aplicado */
+.status-negado {
+    background: #e74c3c;      /* vermelho */
+}
+
+/* Padrão */
+.status-default {
+    background: #95a5a6;
+}
+#btnBuscar{
+    background-color:#8f9292;
+    border: 1px #4b4b4b;
 }

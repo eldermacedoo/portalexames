@@ -20,7 +20,7 @@
                     <input type="date" id="fim" class="form-control" value="{{ date('Y-m-d') }}">
                 </div>
                 <div class="col-md-3">
-                    <button id="btnBuscar" class="btn btn-primary">Buscar O.S.</button>
+                    <button id="btnBuscar" class="btn btn-primary">Buscar</button>
                 </div>
                 <div class="col-md-3 text-end">
                     <div id="loading" style="display:none;">
@@ -167,24 +167,33 @@
             return s;
         }
 
-        // badge colorido conforme status
         function statusBadge(rawStatus) {
             const text = statusTextFromCode(rawStatus);
-            if (!text) return '<span class="badge bg-secondary">—</span>';
+            if (!text) return '<span class="status-badge status-default">—</span>';
 
             const low = text.toLowerCase();
-            let cls = 'bg-secondary';
-            if (low.includes('disponível') || low.includes('disponivel')) cls = 'bg-success';
-            else if (low.includes('em processamento') || low.includes('consultado web') || low.includes('aguard')) cls = 'bg-warning';
-            else if (low.includes('entreg') || low.includes('impresso')) cls = 'bg-primary';
-            else if (low.includes('não') || low.includes('nao')) cls = 'bg-danger';
+            let cls = 'status-default';
 
+            if (low.includes('disponível') && !low.includes('parcial')) cls = 'status-ok';
+            else if (low.includes('parcial')) cls = 'status-partial';
+            else if (low.includes('em processamento')) cls = 'status-processing';
+            else if (low.includes('consultado')) cls = 'status-consultado';
+            else if (low.includes('entreg')) cls = 'status-entregue';
+            else if (low.includes('impresso')) cls = 'status-impresso';
+            else if (low.includes('aguard')) cls = 'status-aguarde';
+            else if (low.includes('pendente')) cls = 'status-pendente';
+            else if (low.includes('recoleta')) cls = 'status-recoleta';
+            else if (low.includes('não') || low.includes('nao')) cls = 'status-negado';
+
+            // escapa caracteres especiais
             const esc = String(text)
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;');
-            return `<span class="badge ${cls}">${esc}</span>`;
+
+            return `<span class="status-badge ${cls}">${esc}</span>`;
         }
+
 
         // função principal de busca das O.S.
         async function buscarOS(s, e) {
@@ -352,11 +361,10 @@
             buscarOS(inicio.value, fim.value);
         });
 
-        // auto busca 1 ano atrás
         const hoje = new Date();
-        const umAnoAtras = new Date();
-        umAnoAtras.setFullYear(hoje.getFullYear() - 1);
-        const inicioAuto = umAnoAtras.toISOString().slice(0, 10);
+        const trintaDiasAtras = new Date();
+        trintaDiasAtras.setDate(hoje.getDate() - 30);
+        const inicioAuto = trintaDiasAtras.toISOString().slice(0, 10);
         const fimAuto = hoje.toISOString().slice(0, 10);
         inicio.value = inicioAuto;
         fim.value = fimAuto;
