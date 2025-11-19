@@ -2,7 +2,6 @@
 @include('layouts.head')
 
 <style>
-  /* estilos específicos do header para centralizar o menu sem sobreposição */
   .site-header {
     position: relative;
     z-index: 10;
@@ -14,17 +13,14 @@
     align-items: center;
   }
 
-  /* Centraliza o nav no desktop */
   .site-header .main-nav {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
     top: 50%;
     transform: translate(-50%, -50%);
-    /* centraliza vertical + horizontal */
   }
 
-  /* Garante que logo e user não sejam cobertos */
   .site-header .logo-wrapper {
     z-index: 20;
   }
@@ -33,7 +29,6 @@
     z-index: 20;
   }
 
-  /* Pequeno ajuste para evitar sobreposição em larguras menores */
   @media (max-width: 991.98px) {
     .site-header .main-nav {
       position: static;
@@ -47,19 +42,16 @@
     }
   }
 
-  /* Ajustes do dropdown de usuário (form de senha) */
   .user-password-block .form-control-sm {
     height: calc(1.6rem + .6rem);
     padding: .25rem .5rem;
   }
 
-  /* largura mínima do dropdown para caber os inputs */
   .user-dropdown-width {
     min-width: 300px;
     max-width: 360px;
   }
 
-  /* mantém as mensagens compactas */
   .user-dropdown-width .alert {
     margin-bottom: .5rem;
     padding: .35rem .5rem;
@@ -133,8 +125,6 @@
 
 
 </header>
-
-<!-- Modal Alterar Senha -->
 <div class="modal fade" id="alterarSenhaModal" tabindex="-1" aria-labelledby="alterarSenhaModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-sm modal-dialog-centered">
     <div class="modal-content">

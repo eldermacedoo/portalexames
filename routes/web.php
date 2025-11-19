@@ -3,22 +3,13 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\PacienteController;
-
-
+use App\Http\Controllers\UnidadeController;
 
 Route::get('/', fn() => redirect()->route('login'));
-
-// Formulário de login (GET)
+Route::get('/unidades', [UnidadeController::class, 'index'])->name('unidades.index');
 Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
-
-// Processa o login (POST)
 Route::post('/login', [LoginController::class, 'authenticate'])->name('login.post');
-
-// Logout (padrão app) - se seu LoginController espera GET, mantive GET,
-// mas idealmente deveria ser POST. Mantenha conforme já implementado.
 Route::get('/logout', [LoginController::class, 'logout'])->name('logout');
-
-// Home — protege via checagem manual de sessão (mantive sua lógica)
 Route::get('/home', function () {
     if (!session('user')) {
         return redirect()->route('login');
@@ -26,30 +17,10 @@ Route::get('/home', function () {
     return view('home');
 })->name('home');
 
-
-/*
-|--------------------------------------------------------------------------
-| Rotas do módulo Paciente
-|--------------------------------------------------------------------------
-|
-| Observações:
-| - Não alterei nomes de métodos do PacienteController.
-| - A view de login (form) continua sendo servida por LoginController@showLoginForm (rota 'login').
-| - O endpoint SOAP de autenticação do paciente fica público (POST /soap-login) para receber o form.
-|
-*/
-
-// Endpoint que recebe o formulário de login do paciente (soap-login)
 Route::post('/soap-login', [PacienteController::class, 'soapLogin'])->name('paciente.soapLogin');
-
-// Logout específico do módulo paciente (opcional)
 Route::post('/logout-paciente', [PacienteController::class, 'logout'])->name('paciente.logout');
 
 
-/*
-| Rotas protegidas do módulo paciente
-| Aplicar o middleware personalizado 'pacienteAuth' (criado e registrado em Kernel)
-*/
 Route::middleware(['pacienteAuth'])->group(function () {
 
     Route::get('/paciente', function () {

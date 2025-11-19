@@ -12,15 +12,9 @@ use App\Models\FeedbackPaciente;
 
 class PacienteController extends Controller
 {
-    // =========================
-    // Config/Const SOAP
-    // =========================
     private string $soapUrl = 'https://portal.laboratorioplatano.com.br:443/shift/lis/platano/elis/s01.util.b2b.shift.consultas.Webserver.cls';
     private string $soapNs  = 'http://www.shift.com.br';
 
-    // =========================
-    // LISTAR POR PERÍODO (mantém sua lógica, corrige headers)
-    // =========================
     public function listaPorPeriodo(Request $request)
     {
         $inicio = $request->query('inicio', date('Y-m-01'));
@@ -120,12 +114,9 @@ class PacienteController extends Controller
                     $osNodes = $xpath->query("//*[local-name() = 'os']");
 
                     foreach ($osNodes as $osNode) {
-                        // osNumero
                         $numNodeList = $xpath->query("./*[local-name() = 'osNumero']", $osNode);
                         if (!$numNodeList || $numNodeList->length === 0) continue;
                         $osNumero = trim((string) $numNodeList->item(0)->textContent);
-
-                        // data
                         $dateNodeList = $xpath->query("./*[local-name() = 'data']", $osNode);
                         $data = null;
                         if ($dateNodeList && $dateNodeList->length > 0) {
@@ -142,15 +133,12 @@ class PacienteController extends Controller
                             }
                         }
 
-                        // status
                         $statusNodeList = $xpath->query("./*[local-name() = 'status']", $osNode);
                         $status = null;
                         if ($statusNodeList && $statusNodeList->length > 0) {
                             $s = trim((string) $statusNodeList->item(0)->textContent);
                             $status = ($s === '') ? null : $s;
                         }
-
-                        // mnemonicos (duas tentativas + fallback)
                         $mnemonicos = [];
                         $mnQuerySpecific = "./*[local-name() = 'listaProcedimento']/*[local-name() = 'osProcedimento']/*[local-name() = 'mnemonico']";
                         $mnNodes = $xpath->query($mnQuerySpecific, $osNode);
@@ -253,7 +241,6 @@ class PacienteController extends Controller
 
         if (!$osNumero) return response('Parâmetro osNumero é obrigatório', 400);
 
-        // Sessão
         $sessionUser = session('user');
         if (!$sessionUser || !isset($sessionUser['userId']) || !isset($sessionUser['senha'])) {
             return response('Usuário não autenticado (session user).', 401);
@@ -286,7 +273,7 @@ class PacienteController extends Controller
         ];
         if ($cookie = session('soap_cookie')) $curlHeaders[] = 'Cookie: ' . $cookie;
 
-        // cURL SOAP
+        
         $ch = curl_init();
         curl_setopt_array($ch, [
             CURLOPT_URL => $this->soapUrl,
@@ -309,7 +296,6 @@ class PacienteController extends Controller
             return response("Resposta vazia do serviço SOAP (status: {$httpStatus})", 502);
         }
 
-        // Extrai urlPdf
         libxml_use_internal_errors(true);
         $dom = new \DOMDocument();
         if (!@$dom->loadXML($resp)) {
@@ -325,7 +311,6 @@ class PacienteController extends Controller
         }
         if (!$urlPdf) return response("Nenhum urlPdf encontrado para O.S. {$osNumero}", 404);
 
-        // ====== CACHE LOCAL DO PDF ======
         $suffix   = ($emitir === 'true' || $emitir === true) ? '_emitir' : '';
         $relPath  = "laudos/{$osNumero}{$suffix}.pdf";
         $absPath  = Storage::path($relPath);
@@ -336,7 +321,6 @@ class PacienteController extends Controller
                 if (!$remote->successful()) {
                     return response("Falha ao baixar PDF remoto. Status: " . $remote->status(), 502);
                 }
-                // Garante pasta
                 Storage::makeDirectory('laudos');
                 Storage::put($relPath, $remote->body());
             } catch (\Throwable $e) {
@@ -344,7 +328,6 @@ class PacienteController extends Controller
             }
         }
 
-        // ====== HEADERS DE CACHE ======
         $mtime = @filemtime($absPath) ?: time();
         $mtimeHdr = gmdate('D, d M Y H:i:s', $mtime) . ' GMT';
         $etag = @md5_file($absPath) ?: sha1($relPath . $mtime);
@@ -360,7 +343,6 @@ class PacienteController extends Controller
             ]);
         }
 
-        // Stream do arquivo local
         $filename = 'laudo-' . preg_replace('/[^0-9A-Za-z_\-\.]/', '_', $osNumero) . '.pdf';
 
         return Response::file($absPath, [
@@ -373,17 +355,13 @@ class PacienteController extends Controller
         ]);
     }
 
-    // =========================
-    // VIEW: PDF com feedback “leve”
-    // Rota: paciente.pdf-feedback (GET /paciente/pdf-feedback)
-    // =========================
+
     public function pdfFeedback(Request $request)
     {
         $osNumero = $request->query('osNumero');
         $emitir   = $request->query('emitir', 'false');
         if (!$osNumero) abort(404);
 
-        // monta URL pela rota nomeada (evita hardcode)
         $pdfUrl = route('paciente.os.abrir', [
             'osNumero' => $osNumero,
             'emitir'   => $emitir,
@@ -392,20 +370,17 @@ class PacienteController extends Controller
         return view('paciente.pdf-feedback', compact('pdfUrl', 'osNumero'));
     }
 
-    // =========================
-    // SALVAR FEEDBACK (idempotente por O.S.)
-    // Rota: paciente.salvarFeedback (POST /paciente/feedback)
-    // =========================
+
     public function salvarFeedback(Request $request)
     {
         $data = $request->validate([
             'feedbackId' => 'nullable|integer',
             'osNumero'   => 'required_without:feedbackId|string|max:100',
-            'nota'       => 'nullable|integer|min:1|max:5', // UI usa 1..5
+            'nota'       => 'nullable|integer|min:1|max:5', 
             'comentario' => 'nullable|string|max:2000',
         ]);
 
-        // Atualização por ID
+      
         if (!empty($data['feedbackId'])) {
             $fp = FeedbackPaciente::find($data['feedbackId']);
             if (!$fp) return response()->json(['success' => false, 'message' => 'Feedback não encontrado'], 404);
@@ -417,7 +392,7 @@ class PacienteController extends Controller
             return response()->json(['success' => true, 'id' => $fp->id]);
         }
 
-        // Criação idempotente por O.S.
+        
         if (empty($data['osNumero'])) {
             return response()->json(['success' => false, 'message' => 'O.S. obrigatória para criar feedback'], 422);
         }
